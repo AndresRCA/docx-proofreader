@@ -43,12 +43,38 @@ def extract_selected_text(document_root: ET.Element, comments):
 
 def extract_paragraph_data(paragraph: ET.Element, comments):
     """Extract data for a single paragraph, including comments and suggestions."""
-    paragraph_text = ''.join(paragraph.itertext()).strip()
+    paragraph_text_parts = []  # Collect parts of the paragraph text with formatting
     paragraph_data = {
-        'content': paragraph_text,  # Full text of the paragraph
+        'content': '',  # Full text of the paragraph with suggestions applied
         'comments': [],  # Comments associated with the paragraph
         'suggestions': []  # Suggestions (insertions/deletions) in the paragraph
     }
+
+    # Iterate through the child elements of the paragraph to process text, insertions, and deletions
+    for elem in paragraph.iter():
+        if elem.tag.endswith("t"):  # Regular text
+            paragraph_text_parts.append(elem.text or "")
+        elif elem.tag.endswith("ins"):  # Insertions
+            inserted_text = ''.join(child.text or "" for child in elem.iter() if child.tag.endswith("t")).strip()
+            paragraph_text_parts.append(f"**{inserted_text}**")  # Format insertions with **
+            paragraph_data['suggestions'].append({
+                'insertion': inserted_text,
+                'deletion': None,
+                'replies': []  # Placeholder for replies if needed
+            })
+        elif elem.tag.endswith("del"):  # Deletions
+            deleted_text = ''.join(child.text or "" for child in elem.iter() if child.tag.endswith("delText")).strip()
+            # Apply strikethrough formatting to each character of the deleted text
+            formatted_deletion = ''.join(f"̶{char}" for char in deleted_text)
+            paragraph_text_parts.append(formatted_deletion)
+            paragraph_data['suggestions'].append({
+                'insertion': None,
+                'deletion': deleted_text,
+                'replies': []  # Placeholder for replies if needed
+            })
+
+    # Combine the parts to form the full paragraph text
+    paragraph_data['content'] = ''.join(paragraph_text_parts).strip()
 
     # Handle comments associated with the paragraph
     comment_references = paragraph.findall('.//w:commentRangeStart', NAMESPACES)
@@ -61,26 +87,6 @@ def extract_paragraph_data(paragraph: ET.Element, comments):
                     'selected_text': comments[comment_id].get('selected_text', ''),  # Text the comment refers to
                     'replies': comments[comment_id]['replies']  # Replies to the comment
                 })
-
-    # Handle insertions (suggested additions) in the paragraph
-    insertions = paragraph.findall('.//w:ins', NAMESPACES)
-    for insertion in insertions:
-        inserted_text = ''.join(insertion.itertext()).strip()
-        paragraph_data['suggestions'].append({
-            'insertion': inserted_text,  # Text that was inserted
-            'deletion': None,  # No deletion for this suggestion
-            'replies': []  # Placeholder for replies if needed
-        })
-
-    # Handle deletions (suggested removals) in the paragraph
-    deletions = paragraph.findall('.//w:del', NAMESPACES)
-    for deletion in deletions:
-        deleted_text = ''.join(deletion.itertext()).strip()
-        paragraph_data['suggestions'].append({
-            'insertion': None,  # No insertion for this suggestion
-            'deletion': deleted_text,  # Text that was deleted
-            'replies': []  # Placeholder for replies if needed
-        })
 
     return paragraph_data
 

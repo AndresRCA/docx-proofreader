@@ -1,5 +1,6 @@
 import os
 import zipfile
+from collections import defaultdict
 import xml.etree.ElementTree as ET
 
 # Formatting functions
@@ -10,6 +11,14 @@ def format_deletion_text(text):
   return "".join(f"{char}̶" for char in text)  # Strikethrough formatting
 
 def extract_paragraphs(docx_path):
+  """
+    Returns:
+      list[dict]: A list of paragraphs, each represented as:
+        - content (str): Paragraph text.
+        - comments (list[dict]): Associated comments, each with:
+            - id (str): Comment ID.
+            - anchor (str): Highlighted text.
+  """
   with zipfile.ZipFile(docx_path, "r") as docx:
     with docx.open("word/document.xml") as xml_file:
       tree = ET.parse(xml_file)
@@ -136,6 +145,24 @@ def extract_paragraphs(docx_path):
         paragraphs.append(paragraph_dict)
 
       return paragraphs
+    
+def sort_comments(comments):
+  """Adds a reply list to the list of comments if there are comments that share the same anchor value."""
+  # Group comments by anchor
+  grouped = defaultdict(list)
+  for comment in comments:
+    grouped[comment['anchor']].append(comment)
+
+  # Process grouped comments
+  sorted_comments = []
+  for group in grouped.values():
+    main_comment = group[0].copy() # First comment is the main one
+    main_comment['replies'] = []
+    if len(group) > 1:
+      main_comment['replies'] = [{'id': c['id']} for c in group[1:]] # Subsequent replies
+    sorted_comments.append(main_comment)
+
+  return sorted_comments
 
 # Define the paths to the .docx file and relevant XML files
 input_folder = os.path.join(os.getcwd(), "input")
@@ -149,3 +176,6 @@ docx_path = os.path.join(input_folder, docx_file)
 paragraphs = extract_paragraphs(docx_path)
 for paragraph in paragraphs:
     print(paragraph)
+
+    paragraph['comments'] = sort_comments(paragraph['comments'])
+    print(paragraph['comments'])

@@ -145,9 +145,58 @@ def extract_paragraphs(docx_path):
         paragraphs.append(paragraph_dict)
 
       return paragraphs
-    
+
+def extract_comments(comments):
+  """
+    Extracts comment content from comments.xml and associates it with the respective comment IDs.
+    Updates the content for top-level comments and their replies.
+    Args:
+      comments (list[dict]): A list of comments, each represented as:
+        - id (str): Comment ID.
+        - anchor (str): Highlighted text.
+        - replies (list[dict]): Associated replies, each with:
+            - id (str): Comment ID.
+    Returns:
+      list[dict]: Updated comments with content for each ID.
+  """
+  # Open the .docx file and access comments.xml
+  with zipfile.ZipFile(docx_path, "r") as docx:
+    with docx.open("word/comments.xml") as xml_file:
+      tree = ET.parse(xml_file)
+      root = tree.getroot()
+
+      # Namespace handling
+      ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+
+      # Update the content for each comment and its replies
+      for comment in comments:
+        # Update top-level comment content
+        comment_id = comment["id"]
+        comment_elem = root.find(f"./w:comment[@w:id='{comment_id}']", ns)
+        if comment_elem is None:
+          raise ValueError("Couldn't find comment with id=" + comment_id)
+        comment["content"] = comment_elem.find("./w:p/w:r/w:t", ns).text
+
+        # Update replies content
+        for reply in comment["replies"]:
+          reply_id = reply["id"]
+          reply_elem = root.find(f"./w:comment[@w:id='{reply_id}']", ns)
+          if reply_elem is None:
+            raise ValueError("Couldn't find reply with id=" + reply_id)
+          
+          reply["content"] = reply_elem.find("./w:p/w:r/w:t", ns).text
+
+  return comments
+
 def sort_comments(comments):
-  """Adds a reply list to the list of comments if there are comments that share the same anchor value."""
+  """
+    Adds a reply list to the list of comments if there are comments that share the same anchor value.
+    Returns:
+      list[dict]: A list of paragraphs, each represented as:
+        - id (str): Comment ID.
+        - replies (list[dict]): Associated comments, each with:
+            - id (str): Comment ID.
+  """
   # Group comments by anchor
   grouped = defaultdict(list)
   for comment in comments:
@@ -175,7 +224,10 @@ if not docx_file:
 docx_path = os.path.join(input_folder, docx_file)
 paragraphs = extract_paragraphs(docx_path)
 for paragraph in paragraphs:
-    print(paragraph)
+    # print(paragraph)
 
     paragraph['comments'] = sort_comments(paragraph['comments'])
+    # print(paragraph['comments'])
+
+    paragraph['comments'] = extract_comments(paragraph['comments'])
     print(paragraph['comments'])

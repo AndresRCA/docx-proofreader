@@ -56,7 +56,7 @@ def extract_paragraphs(docx_path):
 
           # Insertions
           elif elem.tag == f"{{{ns['w']}}}ins":
-            text_elem = elem.find(".//w:t", ns)
+            text_elem = elem.find("./w:r/w:t", ns)
             if text_elem is None: continue
 
             text = format_insertion_text(text_elem.text)
@@ -88,7 +88,7 @@ def extract_paragraphs(docx_path):
 
           # Deletions
           elif elem.tag == f"{{{ns['w']}}}del":
-            text_elem = elem.find(".//w:delText", ns)
+            text_elem = elem.find("./w:r/w:delText", ns)
             if text_elem is None: continue
 
             text = format_deletion_text(text_elem.text)
@@ -224,10 +224,7 @@ if not docx_file:
 docx_path = os.path.join(input_folder, docx_file)
 paragraphs = extract_paragraphs(docx_path)
 for paragraph in paragraphs:
-    # print(paragraph)
-
+    # Sort and populate comments
     paragraph['comments'] = sort_comments(paragraph['comments'])
-    # print(paragraph['comments'])
-
     paragraph['comments'] = extract_comments(paragraph['comments'])
-    print(paragraph['comments'])
+    print(paragraph)

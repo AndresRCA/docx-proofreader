@@ -212,6 +212,31 @@ def sort_comments(comments):
 
   return sorted_comments
 
+def export_paragraphs_to_txt(paragraphs, output_path):
+    """
+    Exports the paragraphs and their associated comments to a .txt file in the specified format.
+    
+    Args:
+        paragraphs (list[dict]): List of paragraphs with content and comments.
+        output_path (str): Path to the output .txt file.
+    """
+    with open(output_path, "w", encoding="utf-8") as file:
+        for paragraph in paragraphs:
+            # Write paragraph content
+            file.write("===\n")
+            file.write(f"Current text:\n{paragraph['content']}\n")
+            
+            # Write comments and their replies if comments exist
+            if paragraph['comments']:
+                file.write("Comment(s):\n")
+                for comment in paragraph['comments']:
+                    file.write(f"[{comment['anchor']}] -> {comment['content']}. ")
+                    for reply in comment.get('replies', []):
+                        file.write(f"{reply['content']}. ")
+                    file.write("\n")
+        
+        file.write("===\n")
+
 # Define the paths to the .docx file and relevant XML files
 input_folder = os.path.join(os.getcwd(), "input")
 docx_file = next((f for f in os.listdir(input_folder) if f.endswith(".docx")), None)
@@ -226,4 +251,11 @@ for paragraph in paragraphs:
     # Sort and populate comments
     paragraph['comments'] = sort_comments(paragraph['comments'])
     paragraph['comments'] = extract_comments(paragraph['comments'])
-    print(paragraph)
+
+# Define the output file path
+output_file = os.path.join(os.getcwd(), "proofread.txt")
+
+# Export paragraphs to the output file
+export_paragraphs_to_txt(paragraphs, output_file)
+
+print(f"Paragraphs exported to {output_file}")

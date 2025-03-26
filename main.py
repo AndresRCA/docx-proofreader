@@ -28,10 +28,7 @@ def extract_paragraphs(docx_path):
       paragraphs = []
 
       for paragraph in root.findall(".//w:p", ns):
-        # Skip paragraphs without comments, insertions, or deletions
-        if not any(paragraph.findall(f".//w:{tag}", ns) for tag in ["commentRangeStart", "ins", "del"]):
-          continue
-
+        # Initialize paragraph portions and comments
         paragraph_portions = []
         comments = []
         current_active_ids = []
@@ -140,8 +137,9 @@ def extract_paragraphs(docx_path):
           paragraph_portions.append(text)
 
         full_paragraph_text = "".join(paragraph_portions)
-        paragraph_dict = {"content": full_paragraph_text, "comments": comments}
-        paragraphs.append(paragraph_dict)
+        if full_paragraph_text:  # Exclude empty paragraphs
+          paragraph_dict = {"content": full_paragraph_text, "comments": comments}
+          paragraphs.append(paragraph_dict)
 
       return paragraphs
 
@@ -248,6 +246,7 @@ if not docx_file:
 docx_path = os.path.join(input_folder, docx_file)
 paragraphs = extract_paragraphs(docx_path)
 for paragraph in paragraphs:
+    print(paragraph)
     # Sort and populate comments
     paragraph['comments'] = sort_comments(paragraph['comments'])
     paragraph['comments'] = extract_comments(paragraph['comments'])

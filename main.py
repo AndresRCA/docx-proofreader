@@ -3,9 +3,8 @@ import zipfile
 from collections import defaultdict
 import xml.etree.ElementTree as ET
 
-# Formatting functions
 def format_insertion_text(text):
-  return f"**{text}**"
+  return "".join(f"{char}̲" for char in text)  # Underline formatting
 
 def format_deletion_text(text):
   return "".join(f"{char}̶" for char in text)  # Strikethrough formatting

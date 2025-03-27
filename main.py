@@ -10,6 +10,9 @@ def format_insertion_text(text):
 def format_deletion_text(text):
   return "".join(f"{char}̶" for char in text)  # Strikethrough formatting
 
+def has_edits(content):
+  return any(tag in content for tag in ["̲", "̶"])
+
 def extract_paragraphs(docx_path):
   """
     Returns:
@@ -227,24 +230,36 @@ def get_context(paragraphs: list, index: int, context_level=0) -> list:
     
     return context
 
-def export_paragraphs_to_txt(paragraphs, output_path):
+def export_instructions_to_txt(instructions, output_path):
     """Exports the paragraphs and their associated comments to a .txt file in the specified format."""
     with open(output_path, "w", encoding="utf-8") as file:
-      for paragraph in paragraphs:
-        # Write paragraph content
+      for context in instructions:
         file.write("===\n")
-        file.write(f"Current text:\n{paragraph['content']}\n")
+        file.write(f"Current context:\n")
         
         # Write comments and their replies if comments exist
-        if paragraph['comments']:
-          file.write("Comment(s):\n")
-          for comment in paragraph['comments']:
+        working_paragraph = None
+        for paragraph in context:
+          if paragraph['working_paragraph']:
+            file.write("{" + paragraph['content'] + "}\n")
+            working_paragraph = paragraph
+          else:
+            file.write(f"{paragraph['content']}\n")
+
+        # Write comments and their replies for the active paragraph
+        file.write("\nComment(s):\n")
+        if len(working_paragraph['comments']) == 0:
+          file.write("!NONE!\n")
+        else:
+          for comment in working_paragraph['comments']:
+            # Write the main comment
             file.write(f"[{comment['anchor']}] -> {comment['content']}. ")
-            for reply in comment.get('replies', []):
+            # Write any replies to the comment as continuations of the main comment
+            for reply in comment['replies']:
               file.write(f"{reply['content']}. ")
             file.write("\n")
         
-        file.write("===\n")
+      file.write("===\n")
 
 # Define the paths to the .docx file and relevant XML files
 input_folder = os.path.join(os.getcwd(), "input")
@@ -266,15 +281,15 @@ for paragraph in paragraphs:
 instructions = []  # List to hold paragraphs with comments or insertions/deletions ([paragraph[]])
 for index, paragraph in enumerate(paragraphs):
     # Check if the paragraph has comments or insertions/deletions
-    if paragraph['comments'] or any(tag in paragraph['content'] for tag in ["̲", "̶"]):  # Check for underlined or strikethrough text
-        instructions.append(get_context(paragraphs, index, context_level=1))  # Add context for the paragraph
-
-print(instructions)
+    if paragraph['comments'] or has_edits(paragraph['content']):
+        # Add context for the paragraph (paragraphs surrounding the current paragraph that has comments or edits)
+        context = get_context(paragraphs, index, context_level=1)
+        instructions.append(context)
 
 # Define the output file path
 output_file = os.path.join(os.getcwd(), "proofread.txt")
 
 # Export paragraphs to the output file
-export_paragraphs_to_txt(paragraphs, output_file)
+export_instructions_to_txt(instructions, output_file)
 
 print(f"Paragraphs exported to {output_file}")

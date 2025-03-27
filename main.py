@@ -3,15 +3,21 @@ import zipfile
 from collections import defaultdict
 import copy
 import xml.etree.ElementTree as ET
+import re  # Import regex module for pattern matching
 
 def format_insertion_text(text):
-  return "".join(f"{char}̲" for char in text)  # Underline formatting
+  return f"**{text}**" # Bold formatting for insertions
 
 def format_deletion_text(text):
-  return "".join(f"{char}̶" for char in text)  # Strikethrough formatting
+  return f"--{text}--" # Double dash formatting for deletions
 
 def has_edits(content):
-  return any(tag in content for tag in ["̲", "̶"])
+  """
+  Checks if the content contains text encompassed by insertion (**{text}**) or deletion (--{text}--) formats.
+  """
+  insertion_pattern = r"\*\*.*?\*\*" # Matches text between ** and **
+  deletion_pattern = r"--.*?--" # Matches text between -- and --
+  return bool(re.search(insertion_pattern, content) or re.search(deletion_pattern, content))
 
 def extract_paragraphs(docx_path):
   """

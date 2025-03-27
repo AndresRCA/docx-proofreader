@@ -3,7 +3,7 @@ import zipfile
 from collections import defaultdict
 import copy
 import xml.etree.ElementTree as ET
-import re  # Import regex module for pattern matching
+import re
 
 def format_insertion_text(text):
   return f"**{text}**" # Bold formatting for insertions

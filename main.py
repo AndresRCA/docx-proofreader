@@ -1,6 +1,7 @@
 import os
 import zipfile
 from collections import defaultdict
+import copy
 import xml.etree.ElementTree as ET
 
 def format_insertion_text(text):
@@ -210,28 +211,38 @@ def sort_comments(comments):
 
   return sorted_comments
 
-def export_paragraphs_to_txt(paragraphs, output_path):
+def get_context(paragraphs: list, index: int, context_level=0) -> list:
     """
-    Exports the paragraphs and their associated comments to a .txt file in the specified format.
+      Returns a selected paragraph and its surrounding paraghraphs according to the value of `context_level`.
+        `context_level=1`: returns selected paragraph along with the preceding and former paragraph.
+        `context_level=2`: returns selected paragraph along with the 2 preceding and former paragraphs, and so on...
+    """
+    start = max(0, index - context_level)  # Ensure start is at least 0
+    end = min(len(paragraphs), index + context_level + 1)  # Ensure end doesn't exceed list length
+    context = copy.deepcopy(paragraphs[start:end])
+
+    # Mark the active paragraph
+    for i, paragraph in enumerate(context):
+      paragraph['working_paragraph'] = (start + i == index)
     
-    Args:
-        paragraphs (list[dict]): List of paragraphs with content and comments.
-        output_path (str): Path to the output .txt file.
-    """
+    return context
+
+def export_paragraphs_to_txt(paragraphs, output_path):
+    """Exports the paragraphs and their associated comments to a .txt file in the specified format."""
     with open(output_path, "w", encoding="utf-8") as file:
-        for paragraph in paragraphs:
-            # Write paragraph content
-            file.write("===\n")
-            file.write(f"Current text:\n{paragraph['content']}\n")
-            
-            # Write comments and their replies if comments exist
-            if paragraph['comments']:
-                file.write("Comment(s):\n")
-                for comment in paragraph['comments']:
-                    file.write(f"[{comment['anchor']}] -> {comment['content']}. ")
-                    for reply in comment.get('replies', []):
-                        file.write(f"{reply['content']}. ")
-                    file.write("\n")
+      for paragraph in paragraphs:
+        # Write paragraph content
+        file.write("===\n")
+        file.write(f"Current text:\n{paragraph['content']}\n")
+        
+        # Write comments and their replies if comments exist
+        if paragraph['comments']:
+          file.write("Comment(s):\n")
+          for comment in paragraph['comments']:
+            file.write(f"[{comment['anchor']}] -> {comment['content']}. ")
+            for reply in comment.get('replies', []):
+              file.write(f"{reply['content']}. ")
+            file.write("\n")
         
         file.write("===\n")
 
@@ -246,10 +257,19 @@ if not docx_file:
 docx_path = os.path.join(input_folder, docx_file)
 paragraphs = extract_paragraphs(docx_path)
 for paragraph in paragraphs:
-    print(paragraph)
     # Sort and populate comments
-    paragraph['comments'] = sort_comments(paragraph['comments'])
-    paragraph['comments'] = extract_comments(paragraph['comments'])
+    if paragraph['comments']:
+      paragraph['comments'] = sort_comments(paragraph['comments'])
+      paragraph['comments'] = extract_comments(paragraph['comments'])
+
+# Instructions
+instructions = []  # List to hold paragraphs with comments or insertions/deletions ([paragraph[]])
+for index, paragraph in enumerate(paragraphs):
+    # Check if the paragraph has comments or insertions/deletions
+    if paragraph['comments'] or any(tag in paragraph['content'] for tag in ["̲", "̶"]):  # Check for underlined or strikethrough text
+        instructions.append(get_context(paragraphs, index, context_level=1))  # Add context for the paragraph
+
+print(instructions)
 
 # Define the output file path
 output_file = os.path.join(os.getcwd(), "proofread.txt")

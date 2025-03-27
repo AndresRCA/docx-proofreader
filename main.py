@@ -31,7 +31,7 @@ def extract_paragraphs(docx_path):
       ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
       paragraphs = []
 
-      for paragraph in root.findall(".//w:p", ns):
+      for paragraph in root.findall("./w:body/w:p", ns):
         # Initialize paragraph portions and comments
         paragraph_portions = []
         comments = []
@@ -147,12 +147,13 @@ def extract_paragraphs(docx_path):
 
       return paragraphs
 
-def extract_comments(comments):
+def extract_comments(docx_path, comments):
   """
     Extracts comment content from comments.xml and associates it with the respective comment IDs.
     Updates the content for top-level comments and their replies.
     Args:
-      comments (list[dict]): A list of comments, each represented as:
+      - docx_path (str)
+      - comments (list[dict]): A list of comments, each represented as:
         - id (str): Comment ID.
         - anchor (str): Highlighted text.
         - replies (list[dict]): Associated replies, each with:
@@ -275,7 +276,7 @@ for paragraph in paragraphs:
     # Sort and populate comments
     if paragraph['comments']:
       paragraph['comments'] = sort_comments(paragraph['comments'])
-      paragraph['comments'] = extract_comments(paragraph['comments'])
+      paragraph['comments'] = extract_comments(docx_path, paragraph['comments'])
 
 # Instructions
 instructions = []  # List to hold paragraphs with comments or insertions/deletions ([paragraph[]])

@@ -1,3 +1,4 @@
 input/*.docx
 __pycache__
 .pytest_cache
+proofread_instructions.txt

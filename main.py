@@ -1,5 +1,6 @@
 import os
 import zipfile
+import argparse
 from collections import defaultdict
 import copy
 import xml.etree.ElementTree as ET
@@ -196,7 +197,7 @@ def extract_comments(docx_path, comments):
 
   return comments
 
-def sort_comments(comments):
+def sort_replies(comments):
   """
     Adds a reply list to the list of comments if there are comments that share the same anchor value.
     Returns:
@@ -268,35 +269,32 @@ def export_instructions_to_txt(instructions, output_path):
         
       file.write("===\n")
 
-# Define the paths to the .docx file and relevant XML files
-input_folder = os.path.join(os.getcwd(), "input")
-docx_file = next((f for f in os.listdir(input_folder) if f.endswith(".docx")), None)
+def main():
+  parser = argparse.ArgumentParser(description="Extract paragraphs and comments from a DOCX file.")
+  parser.add_argument("docx_path", help="Path to the input DOCX file.")
+  parser.add_argument("-o", "--output_path", default=os.getcwd(), help="Directory for the output TXT file (default: current directory).")
+  parser.add_argument("-c", "--context_level", type=int, default=0, help="Number of surrounding paragraphs to include as context (default: 0).")
+  args = parser.parse_args()
 
-if not docx_file:
-    # Raise an error if no .docx file is found in the input folder
-    raise FileNotFoundError("No .docx file found in the input folder.")
-
-docx_path = os.path.join(input_folder, docx_file)
-paragraphs = extract_paragraphs(docx_path)
-for paragraph in paragraphs:
-    # Sort and populate comments
+  paragraphs = extract_paragraphs(args.docx_path)
+  # Sort and populate comments
+  for paragraph in paragraphs:
     if paragraph['comments']:
-      paragraph['comments'] = sort_comments(paragraph['comments'])
-      paragraph['comments'] = extract_comments(docx_path, paragraph['comments'])
+      paragraph['comments'] = sort_replies(paragraph['comments'])
+      paragraph['comments'] = extract_comments(args.docx_path, paragraph['comments'])
 
-# Instructions
-instructions = []  # List to hold paragraphs with comments or insertions/deletions ([paragraph[]])
-for index, paragraph in enumerate(paragraphs):
+  # Instructions
+  instructions = []  # List to hold paragraphs with comments or insertions/deletions ([paragraph[]])
+  for index, paragraph in enumerate(paragraphs):
     # Check if the paragraph has comments or insertions/deletions
     if paragraph['comments'] or has_edits(paragraph['content']):
-        # Add context for the paragraph (paragraphs surrounding the current paragraph that has comments or edits)
-        context = get_context(paragraphs, index, context_level=1)
-        instructions.append(context)
+      # Add context for the paragraph (paragraphs surrounding the current paragraph that has comments or edits)
+      context = get_context(paragraphs, index, context_level=1)
+      instructions.append(context)
 
-# Define the output file path
-output_file = os.path.join(os.getcwd(), "proofread.txt")
+  output_file = os.path.join(args.output_path, "proofread_instructions.txt")
+  export_instructions_to_txt(instructions, output_file)
+  print(f"Paragraphs exported to {output_file}")
 
-# Export paragraphs to the output file
-export_instructions_to_txt(instructions, output_file)
-
-print(f"Paragraphs exported to {output_file}")
+if __name__ == "__main__":
+  main()

@@ -50,3 +50,7 @@ Comment(s):
 ===
 ...
 ```
+
+## Precautions
+There are some things to take into account when using this tool:
+* This scripts assumes a paragraph based scope, meaning any relevant edits and comments should be contained within their own paragraph. A comment that spans more than one paragraph will produce unexpected behaviour.

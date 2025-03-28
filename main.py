@@ -26,8 +26,8 @@ def extract_paragraphs(docx_path):
       list[dict]: A list of paragraphs, each represented as:
         - content (str): Paragraph text.
         - comments (list[dict]): Associated comments, each with:
-            - id (str): Comment ID.
-            - anchor (str): Highlighted text.
+          - id (str): Comment ID.
+          - anchor (str): Highlighted text.
   """
   with zipfile.ZipFile(docx_path, "r") as docx:
     with docx.open("word/document.xml") as xml_file:
@@ -54,6 +54,7 @@ def extract_paragraphs(docx_path):
 
             text = text_elem.text
 
+            # Check if text is part of a comment
             for active_id in current_active_ids:
               comment = next(
                 (c for c in comments if c["id"] == active_id), None
@@ -85,7 +86,7 @@ def extract_paragraphs(docx_path):
                 if comment_id in current_active_ids:
                   current_active_ids.remove(comment_id)
 
-            # check if there's an active id for a comment
+            # Check if text is part of a comment
             for active_id in current_active_ids:
               comment = next(
                 (c for c in comments if c["id"] == active_id), None
@@ -118,7 +119,7 @@ def extract_paragraphs(docx_path):
                 if comment_id in current_active_ids:
                   current_active_ids.remove(comment_id)
 
-            # check if there's an active id for a comment
+            # Check if text is part of a comment
             for active_id in current_active_ids:
               comment = next(
                 (c for c in comments if c["id"] == active_id), None
@@ -164,7 +165,7 @@ def extract_comments(docx_path, comments):
         - id (str): Comment ID.
         - anchor (str): Highlighted text.
         - replies (list[dict]): Associated replies, each with:
-            - id (str): Comment ID.
+          - id (str): Comment ID.
     Returns:
       list[dict]: Updated comments with content for each ID.
   """
@@ -204,7 +205,7 @@ def sort_replies(comments):
       list[dict]: A list of paragraphs, each represented as:
         - id (str): Comment ID.
         - replies (list[dict]): Associated comments, each with:
-            - id (str): Comment ID.
+          - id (str): Comment ID.
   """
   # Group comments by anchor
   grouped = defaultdict(list)

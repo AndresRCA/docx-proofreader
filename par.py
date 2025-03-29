@@ -73,8 +73,27 @@ def get_paragraph_text(element: ET.Element):
   full_paragraph = "".join(text_parts)
   return full_paragraph
 
+def get_comment_ids_in_paragraph(paragraph_el: ET.Element):
+  comment_ids = []
+
+  # Find all <w:commentRangeStart> inside <w:p>
+  comment_starts = paragraph_el.findall(".//w:commentRangeStart", NAMESPACES)
+
+  for start in comment_starts:
+    comment_id = start.attrib[f'{{{NAMESPACES["w"]}}}id']
+    # Check if the corresponding <w:commentRangeEnd> is in the same paragraph
+    comment_end = paragraph_el.find(f".//w:commentRangeEnd[@w:id='{comment_id}']", NAMESPACES)
+    if comment_end is not None:
+      # Add to the comment list
+      comment_ids.append(comment_id)
+    else:
+      print(f"Couldn't find end of comment with ID={comment_id} in the same paragraph.")
+      print("Ignoring comment from list...")
+  
+  return comment_ids
+
 # Recursive function to extract text within comment ranges while handling nesting properly
-def get_anchors(parent: ET.Element, active_comments: list, comments: dict, ancestors: list[ET.Element]):
+def get_comment_anchors(parent: ET.Element, active_comments: list, comments: dict, ancestors: list[ET.Element]):
   """
   Returns:
     dict[str, dict]: A dictionary where:
@@ -95,7 +114,7 @@ def get_anchors(parent: ET.Element, active_comments: list, comments: dict, ances
 
     # Collect text for all active comments
     elif active_comments and tag_name in ["t", "delText"]:
-      text = elem.text or ""  # Ensure text is not None
+      text = elem.text
 
       # Check grandparent for <w:ins> or <w:del>
       grandparent = ancestors[-3] if len(ancestors) >= 3 else None
@@ -111,7 +130,7 @@ def get_anchors(parent: ET.Element, active_comments: list, comments: dict, ances
         comments[comment_id]["anchor"] += text
 
     # Recursively process child elements
-    get_anchors(elem, active_comments, comments, ancestors)
+    get_comment_anchors(elem, active_comments, comments, ancestors)
 
     # Stop tracking when reaching a matching comment end
     if tag_name == "commentRangeEnd":
@@ -124,7 +143,7 @@ def get_anchors(parent: ET.Element, active_comments: list, comments: dict, ances
 
   return comments  # Return updated comments dictionary
 
-def sort_replies(comments):
+def sort_comment_replies(comments):
   """
     Adds a reply list to the list of comments if there are comments that share the same anchor value.
     Returns:
@@ -170,43 +189,27 @@ def get_comment_content(comments_root: ET.Element, comments: dict):
 
   return comments
 
-def extract_comments_anchor(document_root: ET.Element, comments_root: ET.Element, paragraph_id):
+def extract_comments_from_paragraph(document_root: ET.Element, comments_root: ET.Element, paragraph_id):
   """Extract the anchor for comments found in the paragraph identified with `paragraph_id`"""
   paragraph_root = document_root.find(f".//*[@w14:paraId='{paragraph_id}']", NAMESPACES)
+
+  comment_ids = get_comment_ids_in_paragraph(paragraph_root)
   
-  # Find all <w:commentRangeStart> and <w:commentRangeEnd> inside <w:p>
-  comment_starts = paragraph_root.findall(".//w:commentRangeStart", NAMESPACES)
-  comment_ends = paragraph_root.findall(".//w:commentRangeEnd", NAMESPACES)
-
-  # Create a mapping of comment IDs found inside
-  comments = {} # { '{id}': { 'anchor': str } }
-
-  for start in comment_starts:
-    comment_id = start.attrib[f'{{{NAMESPACES["w"]}}}id']
-    comments[comment_id] = {"anchor": ""}
-
-  # Find comment IDs that don't have a matching start
-  unmatched_comment_ids = []
-
-  for end in comment_ends:
-    comment_id = end.attrib[f'{{{NAMESPACES["w"]}}}id']
-    if comment_id not in comments:
-      print(f"Couldn't find end of comment with ID={comment_id} in the same paragraph.")
-      print("Ignoring comment from list...")
-      unmatched_comment_ids.append(comment_id)
-  # Remove unmatched comment IDs
-  for comment_id in unmatched_comment_ids:
-    comments.pop(comment_id, None)
-
+  if len(comment_ids) == 0: return [] # Return an empty list of comments
+  
+  # Map comment ids to dict with the initial format of a comment:
+  # { "{comment_id}": { "anchor": str, "content": str, "replies": list[{ "id": str, "content": str }] } }
+  comments = {comment_id: {"anchor": "", "content": "", "replies": []} for comment_id in comment_ids}  
+  
   # Proceed with retrieving the commented sections of the paragraph
-  comments = get_anchors(paragraph_root, [], comments, []) # { "{comment_id}": {anchor_text: str} }
-  comments = sort_replies(comments) # { "id": str, "anchor": str, "replies": list[{ "id": str }] }
+  comments = get_comment_anchors(paragraph_root, [], comments, []) # Fill the anchor values 
+  comments = sort_comment_replies(comments) # { "id": str, "anchor": str, "replies": list[{ "id": str }] }
   comments = get_comment_content(comments_root, comments)
   print(comments)
 
   return comments
 
-docx_path = "./input/test.docx"
+docx_path = "./input/test2.docx"
 
 # Parse the XML files we'll be using
 document_root = None
@@ -220,8 +223,8 @@ with zipfile.ZipFile(docx_path, "r") as docx:
     comments_root = comments_tree.getroot()
 
 paragraphs = extract_paragraphs(document_root)
-print("\n".join(map(str, paragraphs)))
-print("\n\n")
+# print("\n".join(map(str, paragraphs)))
+# print("\n\n")
 
 for paragraph in paragraphs:
-  paragraph["comments"] = extract_comments_anchor(document_root, comments_root, paragraph["id"])
+  paragraph["comments"] = extract_comments_from_paragraph(document_root, comments_root, paragraph["id"])

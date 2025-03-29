@@ -1,34 +1,7 @@
 import zipfile
+from collections import defaultdict
 import xml.etree.ElementTree as ET
 
-# Example <w:p> element with nested comments
-xml_data = """
-<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-    <w:r>
-        <w:t>Some text </w:t>
-    </w:r>
-    <w:commentRangeStart w:id="1"/>
-    <w:sdt>
-        <w:sdtContent>
-            <w:commentRangeStart w:id="2"/>
-            <w:r>
-               <w:t>Nested comment text </w:t>
-            </w:r>
-        </w:sdtContent>
-    </w:sdt>
-    <w:r>
-        <w:t>More text </w:t>
-    </w:r>
-    <w:ins>
-        <w:r><w:t>insertion</w:t></w:r>
-    </w:ins>  
-    <w:del>
-        <w:r><w:delText>deletion</w:delText></w:r>
-    </w:del>    
-    <w:commentRangeEnd w:id="1"/>
-    <w:commentRangeEnd w:id="2"/>
-</w:p>
-"""
 # XML namespace for WordprocessingML
 NAMESPACES = {
   "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
@@ -102,6 +75,13 @@ def get_paragraph_text(element: ET.Element):
 
 # Recursive function to extract text within comment ranges while handling nesting properly
 def get_anchors(parent: ET.Element, active_comments: list, comments: dict, ancestors: list[ET.Element]):
+  """
+  Returns:
+    dict[str, dict]: A dictionary where:
+      - Keys (str) represent comment IDs.
+      - Values (dict) contain:
+        - anchor (str): The text associated with the comment.
+  """
   for elem in parent:
     tag_name = elem.tag.split("}")[-1]  # Remove namespace
 
@@ -144,8 +124,51 @@ def get_anchors(parent: ET.Element, active_comments: list, comments: dict, ances
 
   return comments  # Return updated comments dictionary
 
+def sort_replies(comments):
+  """
+    Adds a reply list to the list of comments if there are comments that share the same anchor value.
+    Returns:
+      list[dict]: A list of paragraphs, each represented as:
+        - id (str): Comment ID.
+        - replies (list[dict]): Associated comments, each with:
+          - id (str): Comment ID.
+  """
+  # Group comments by anchor
+  grouped = defaultdict(list)
+  for comment_id, comment in comments.items():
+    grouped[comment['anchor']].append({"id": comment_id, **comment}) # grouped = { "{anchor_value}": [{ "id": str, "anchor": str }] }
+
+  # Process grouped comments
+  sorted_comments = []
+  for group in grouped.values():
+    main_comment = group[0].copy() # First comment is the main one
+    main_comment['replies'] = []
+    if len(group) > 1:
+      main_comment['replies'] = [{'id': c['id']} for c in group[1:]] # Subsequent replies
+    sorted_comments.append(main_comment)
+
+  return sorted_comments
+
 def get_comment_content(comments_root: ET.Element, comments: dict):
-  pass
+  # Update the content for each comment and its replies
+  for comment in comments:
+    # Update top-level comment content
+    comment_id = comment["id"]
+    comment_elem = comments_root.find(f"./w:comment[@w:id='{comment_id}']", NAMESPACES)
+    if comment_elem is None:
+      raise ValueError("Couldn't find comment with id=" + comment_id)
+    comment["content"] = comment_elem.find(".//w:t", NAMESPACES).text
+
+    # Update replies content
+    for reply in comment["replies"]:
+      reply_id = reply["id"]
+      reply_elem = comments_root.find(f"./w:comment[@w:id='{reply_id}']", NAMESPACES)
+      if reply_elem is None:
+        raise ValueError("Couldn't find reply with id=" + reply_id)
+      
+      reply["content"] = reply_elem.find(".//w:t", NAMESPACES).text
+
+  return comments
 
 def extract_comments_anchor(document_root: ET.Element, comments_root: ET.Element, paragraph_id):
   """Extract the anchor for comments found in the paragraph identified with `paragraph_id`"""
@@ -176,8 +199,10 @@ def extract_comments_anchor(document_root: ET.Element, comments_root: ET.Element
     comments.pop(comment_id, None)
 
   # Proceed with retrieving the commented sections of the paragraph
-  comments = get_anchors(paragraph_root, [], comments, [])
-  # comments = get_comment_content(comments_root, comments)
+  comments = get_anchors(paragraph_root, [], comments, []) # { "{comment_id}": {anchor_text: str} }
+  comments = sort_replies(comments) # { "id": str, "anchor": str, "replies": list[{ "id": str }] }
+  comments = get_comment_content(comments_root, comments)
+  print(comments)
 
   return comments
 
@@ -194,14 +219,9 @@ with zipfile.ZipFile(docx_path, "r") as docx:
     comments_tree = ET.parse(comments_xml)
     comments_root = comments_tree.getroot()
 
-# # Parse the XML
-# root = ET.fromstring(xml_data)
-# # Extract the text
-# full_paragraph = get_paragraph_text(root)
-
 paragraphs = extract_paragraphs(document_root)
 print("\n".join(map(str, paragraphs)))
+print("\n\n")
 
 for paragraph in paragraphs:
   paragraph["comments"] = extract_comments_anchor(document_root, comments_root, paragraph["id"])
-  print(paragraph["comments"])

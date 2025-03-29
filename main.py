@@ -28,14 +28,9 @@ def has_edits(content):
 
 def get_plain_text(element: ET.Element):
   """
-  Recursively extracts all text from <w:t> and <w:delText> nodes in the given element.
+  Extracts all text in the given element.
   """
-  parts = []
-  # We use .iter() to walk the entire subtree.
-  for child in element.iter():
-    tag = child.tag.split("}")[-1]
-    if tag in ("t", "delText"):
-      parts.append(child.text or "")
+  parts = [text for text in element.itertext()]
   return "".join(parts)
 
 def extract_paragraphs(root: ET.Element):
@@ -49,9 +44,7 @@ def extract_paragraphs(root: ET.Element):
 
 def get_paragraph_text(element: ET.Element):
   """
-  Recursively process the element, but when encountering an <w:ins> or <w:del>
-  element, first collect all its text (using get_plain_text) then apply the formatting
-  only once.
+  Recursive function that collects the text from elements containing text, with proper formatting depending on its tag name (ins, del, r).
   """
   text_parts = []
   
@@ -70,11 +63,11 @@ def get_paragraph_text(element: ET.Element):
       if del_text:
         text_parts.append(format_deletion_text(del_text))
     
-    # For a run, we want to get its text.
+    # For a r, we want to get its text without formatting.
     elif tag == "r":
       # There might be multiple text parts inside a run.
-      run_text = get_plain_text(child)
-      text_parts.append(run_text)
+      r_text = get_plain_text(child)
+      text_parts.append(r_text)
 
     # Otherwise, recursively process the child element
     else:
@@ -267,12 +260,8 @@ def export_instructions_to_txt(instructions, output_path):
         file.write("!NONE!\n")
       else:
         for comment in working_paragraph['comments']:
-          # Write the main comment
-          file.write(f"[{comment['anchor']}] -> {comment['content']}. ")
-          # Write any replies to the comment as continuations of the main comment
-          for reply in comment['replies']:
-            file.write(f"{reply['content']}. ")
-          file.write("\n")
+          every_comment = ". ".join([comment["content"]] + [r["content"] for r in comment["replies"]]) # "[main_comment]. [reply1]. [reply2...]."
+          file.write(f"[{comment['anchor']}] -> {every_comment}.\n")
       
     file.write("===\n")
 

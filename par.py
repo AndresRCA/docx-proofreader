@@ -1,5 +1,6 @@
 import os
 import zipfile
+import argparse
 from collections import defaultdict
 import re
 import copy
@@ -214,7 +215,6 @@ def extract_comments_from_paragraph(document_root: ET.Element, comments_root: ET
   comments = get_comment_anchors(paragraph_root, [], comments, []) # Fill the anchor values 
   comments = sort_comment_replies(comments) # { "id": str, "anchor": str, "replies": list[{ "id": str }] }
   comments = get_comment_content(comments_root, comments)
-  print(comments)
 
   return comments
 
@@ -234,13 +234,13 @@ def get_context(paragraphs: list, index: int, context_level=0) -> list:
   
   return context
 
-def generate_instructions(paragraphs):
+def generate_instructions(paragraphs, context_level: int):
   instructions = []  # List to hold paragraphs with comments or insertions/deletions ([paragraph[]])
   for index, paragraph in enumerate(paragraphs):
     # Check if the paragraph has comments or insertions/deletions
     if paragraph['comments'] or has_edits(paragraph['content']):
       # Add context for the paragraph (paragraphs surrounding the current paragraph that has comments or edits)
-      context = get_context(paragraphs, index, context_level=1)
+      context = get_context(paragraphs, index, context_level)
       instructions.append(context)
   
   return instructions
@@ -277,7 +277,20 @@ def export_instructions_to_txt(instructions, output_path):
     file.write("===\n")
 
 def main():
-  docx_path = "./input/test2.docx"
+  parser = argparse.ArgumentParser(description="Extract paragraphs and comments from a DOCX file.")
+  parser.add_argument("docx_path", help="Path to the input DOCX file.")
+  parser.add_argument("-o", "--output_path", type=str, default=os.getcwd(), help="Directory for the output TXT file (default: current directory).")
+  parser.add_argument("-c", "--context_level", type=int, default=0, help="Number of surrounding paragraphs to include as context (default: 0).")
+  args = parser.parse_args()
+
+  docx_path, output_path, context_level = args.docx_path, args.output_path, args.context_level
+
+  # Validate docx_path
+  if not os.path.isfile(docx_path):
+    raise FileNotFoundError(f"The file '{docx_path}' does not exist.")
+
+  if not docx_path.lower().endswith(".docx"):
+    raise ValueError(f"The file '{docx_path}' is not a .docx file.")
 
   # Parse the XML files we'll be using
   document_root = None
@@ -295,8 +308,9 @@ def main():
   for paragraph in paragraphs:
     paragraph["comments"] = extract_comments_from_paragraph(document_root, comments_root, paragraph["id"])
   
-  instructions = generate_instructions(paragraphs)
-  output_file = os.path.join("./", "proofread_instructions.txt")
+  instructions = generate_instructions(paragraphs, context_level)
+  output_file = os.path.join(output_path, "proofread_instructions.txt")
   export_instructions_to_txt(instructions, output_file)
 
-main()
+if __name__ == "__main__":
+  main()

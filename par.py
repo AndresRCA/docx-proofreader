@@ -1,5 +1,8 @@
+import os
 import zipfile
 from collections import defaultdict
+import re
+import copy
 import xml.etree.ElementTree as ET
 
 # XML namespace for WordprocessingML
@@ -14,6 +17,13 @@ def format_insertion_text(text):
 
 def format_deletion_text(text):
   return f"--{text}--"  # Double dash formatting for deletions
+
+def has_edits(content):
+  """
+  Checks if the content contains text encompassed by insertion (**{text}**) or deletion (--{text}--) formats.
+  """
+  edit_pattern = r"\*\*.*?\*\*|--.*?--" # Matches either **text** or --text--
+  return bool(re.search(edit_pattern, content))
 
 def get_plain_text(element: ET.Element):
   """
@@ -36,7 +46,6 @@ def extract_paragraphs(root: ET.Element):
       paragraphs.append({"id": paragraph_id, "content": paragraph_text})
   return paragraphs
 
-# Function to recursively extract text and apply formatting
 def get_paragraph_text(element: ET.Element):
   """
   Recursively process the element, but when encountering an <w:ins> or <w:del>
@@ -209,22 +218,85 @@ def extract_comments_from_paragraph(document_root: ET.Element, comments_root: ET
 
   return comments
 
-docx_path = "./input/test2.docx"
+def get_context(paragraphs: list, index: int, context_level=0) -> list:
+  """
+    Returns a selected paragraph and its surrounding paraghraphs according to the value of `context_level`.
+      `context_level=1`: returns selected paragraph along with the preceding and former paragraph.
+      `context_level=2`: returns selected paragraph along with the 2 preceding and former paragraphs, and so on...
+  """
+  start = max(0, index - context_level)  # Ensure start is at least 0
+  end = min(len(paragraphs), index + context_level + 1)  # Ensure end doesn't exceed list length
+  context = copy.deepcopy(paragraphs[start:end])
 
-# Parse the XML files we'll be using
-document_root = None
-comments_root = None
-with zipfile.ZipFile(docx_path, "r") as docx:
-  with docx.open("word/document.xml") as document_xml:
-    document_tree = ET.parse(document_xml)
-    document_root = document_tree.getroot()
-  with docx.open("word/comments.xml") as comments_xml:
-    comments_tree = ET.parse(comments_xml)
-    comments_root = comments_tree.getroot()
+  # Mark the active paragraph
+  for i, paragraph in enumerate(context):
+    paragraph['working_paragraph'] = (start + i == index)
+  
+  return context
 
-paragraphs = extract_paragraphs(document_root)
-# print("\n".join(map(str, paragraphs)))
-# print("\n\n")
+def generate_instructions(paragraphs):
+  instructions = []  # List to hold paragraphs with comments or insertions/deletions ([paragraph[]])
+  for index, paragraph in enumerate(paragraphs):
+    # Check if the paragraph has comments or insertions/deletions
+    if paragraph['comments'] or has_edits(paragraph['content']):
+      # Add context for the paragraph (paragraphs surrounding the current paragraph that has comments or edits)
+      context = get_context(paragraphs, index, context_level=1)
+      instructions.append(context)
+  
+  return instructions
 
-for paragraph in paragraphs:
-  paragraph["comments"] = extract_comments_from_paragraph(document_root, comments_root, paragraph["id"])
+def export_instructions_to_txt(instructions, output_path):
+  """Exports the paragraphs and their associated comments to a .txt file in the specified format."""
+  with open(output_path, "w", encoding="utf-8") as file:
+    for context in instructions:
+      file.write("===\n")
+      file.write(f"Current context:\n")
+      
+      # Write comments and their replies if comments exist
+      working_paragraph = None
+      for paragraph in context:
+        if paragraph['working_paragraph']:
+          file.write("{" + paragraph['content'] + "}\n")
+          working_paragraph = paragraph
+        else:
+          file.write(f"{paragraph['content']}\n")
+
+      # Write comments and their replies for the active paragraph
+      file.write("\nComment(s):\n")
+      if len(working_paragraph['comments']) == 0:
+        file.write("!NONE!\n")
+      else:
+        for comment in working_paragraph['comments']:
+          # Write the main comment
+          file.write(f"[{comment['anchor']}] -> {comment['content']}. ")
+          # Write any replies to the comment as continuations of the main comment
+          for reply in comment['replies']:
+            file.write(f"{reply['content']}. ")
+          file.write("\n")
+      
+    file.write("===\n")
+
+def main():
+  docx_path = "./input/test2.docx"
+
+  # Parse the XML files we'll be using
+  document_root = None
+  comments_root = None
+  with zipfile.ZipFile(docx_path, "r") as docx:
+    with docx.open("word/document.xml") as document_xml:
+      document_tree = ET.parse(document_xml)
+      document_root = document_tree.getroot()
+    with docx.open("word/comments.xml") as comments_xml:
+      comments_tree = ET.parse(comments_xml)
+      comments_root = comments_tree.getroot()
+
+  paragraphs = extract_paragraphs(document_root)
+
+  for paragraph in paragraphs:
+    paragraph["comments"] = extract_comments_from_paragraph(document_root, comments_root, paragraph["id"])
+  
+  instructions = generate_instructions(paragraphs)
+  output_file = os.path.join("./", "proofread_instructions.txt")
+  export_instructions_to_txt(instructions, output_file)
+
+main()

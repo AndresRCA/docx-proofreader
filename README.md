@@ -19,6 +19,7 @@ python main.py <docx_path> [-o <output_directory>] [-c <context_level>]
 - `<docx_path>`: Path to the input `.docx` file.
 - `-o, --output_path` (optional): Directory to save the output file (default: current directory).
 - `-c, --context_level` (optional): Number of surrounding paragraphs to include for context (default: `0`).
+- `-e, --edits` (optional): Include edits as part of the criteria for selecting working paragraphs in the set of instructions (default: `False`).
 
 ### Example:
 ```sh
@@ -29,7 +30,7 @@ This will extract and save the proofreading instructions in `output/proofread_in
 
 ## Output Format
 ```sh
-python main.py document.docx -c 1
+python main.py document.docx -c 1 -e
 ```
 ```
 ===

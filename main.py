@@ -227,11 +227,11 @@ def get_context(paragraphs: list, index: int, context_level=0) -> list:
   
   return context
 
-def generate_instructions(paragraphs, context_level: int):
+def generate_instructions(paragraphs, context_level: int, include_edits: bool):
   instructions = []  # List to hold paragraphs with comments or insertions/deletions ([paragraph[]])
   for index, paragraph in enumerate(paragraphs):
     # Check if the paragraph has comments or insertions/deletions
-    if paragraph['comments'] or has_edits(paragraph['content']):
+    if paragraph['comments'] or (has_edits(paragraph['content']) and include_edits):
       # Add context for the paragraph (paragraphs surrounding the current paragraph that has comments or edits)
       context = get_context(paragraphs, index, context_level)
       instructions.append(context)
@@ -270,9 +270,10 @@ def main():
   parser.add_argument("docx_path", help="Path to the input DOCX file.")
   parser.add_argument("-o", "--output_path", type=str, default=os.getcwd(), help="Directory for the output TXT file (default: current directory).")
   parser.add_argument("-c", "--context_level", type=int, default=0, help="Number of surrounding paragraphs to include as context (default: 0).")
+  parser.add_argument("-e", "--edits", action="store_true", help="Include edits as part of the criteria for selecting working paragraphs in the set of instructions (default: False).")
   args = parser.parse_args()
 
-  docx_path, output_path, context_level = args.docx_path, args.output_path, args.context_level
+  docx_path, output_path, context_level, edits = args.docx_path, args.output_path, args.context_level, args.edits
 
   # Validate docx_path
   if not os.path.isfile(docx_path):
@@ -297,7 +298,7 @@ def main():
   for paragraph in paragraphs:
     paragraph["comments"] = extract_comments_from_paragraph(document_root, comments_root, paragraph["id"])
   
-  instructions = generate_instructions(paragraphs, context_level)
+  instructions = generate_instructions(paragraphs, context_level, edits)
   output_file = os.path.join(output_path, "proofread_instructions.txt")
   export_instructions_to_txt(instructions, output_file)
 

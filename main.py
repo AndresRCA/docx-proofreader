@@ -241,6 +241,9 @@ def generate_instructions(paragraphs, context_level: int, include_edits: bool):
 def export_instructions_to_txt(instructions, output_path):
   """Exports the paragraphs and their associated comments to a .txt file in the specified format."""
   with open(output_path, "w", encoding="utf-8") as file:
+    file.write("```txt\n") # declare format when passing it to AI agent
+    
+    # Content Start
     for context in instructions:
       file.write("===\n")
       file.write(f"Current context:\n")
@@ -263,7 +266,10 @@ def export_instructions_to_txt(instructions, output_path):
           every_comment = ". ".join([comment["content"]] + [r["content"] for r in comment["replies"]]) # "[main_comment]. [reply1]. [reply2...]."
           file.write(f"[{comment['anchor']}] -> {every_comment}.\n")
       
+    # Content End
     file.write("===\n")
+    # Format Block End
+    file.write("```")
 
 def main():
   parser = argparse.ArgumentParser(description="Extract paragraphs and comments from a DOCX file.")
